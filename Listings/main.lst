@@ -1,0 +1,267 @@
+C51 COMPILER V9.60.0.0   MAIN                                                              12/09/2019 10:01:14 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\main
+                    -.lst) TABS(2) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          #include<reg51.h>
+   2          #include<stdio.h>
+   3          // definição de portas 
+   4          sbit oe=P2^3; 
+   5          sbit ale=P2^4;  
+   6          sbit start=P2^5; 
+   7          sbit eoc=P2^6;  
+   8          sbit clk=P2^7;
+   9          #define lcdport P0  //DEFINE A PORTA P0 COMO OS DADOS DO LCD 
+  10          sbit rs=P2^0;
+  11          sbit rw=P2^1;
+  12          sbit en=P2^2;
+  13          sbit rele=P3^2;
+  14          #define input_port P1  //ADC
+  15          int result[5],number, i;
+  16          char rele_status[11] = "desativado";
+  17          
+  18          //--------------------------------------------------------
+  19          // lookup table de conversão de valores de temperatura a partir do valor lido pelo adc em hexa
+  20          code float temp[] = { 
+  21            0.00, 0.59, 1.18, 1.76, 2.35, 2.94, 3.53, 4.12, 4.71, 5.29, 5.88, 6.47, 7.06, 7.65, 8.24, 8.82, 9.41, 10.
+             -00, 10.59, 11.18, 11.76, 12.35, 12.94, 13.53, 
+  22            14.12, 14.71, 15.29, 15.88, 16.47, 17.06, 17.65, 18.24, 18.82, 19.41, 20.00, 20.59, 21.18, 21.76, 22.35, 
+             -22.94, 23.53, 24.12, 24.71, 25.29, 25.88, 26.47, 
+  23            27.06, 27.65, 28.24, 28.82, 29.41, 30.00, 30.59, 31.18, 31.76, 32.35, 32.94, 33.53, 34.12, 34.71, 35.29, 
+             -35.88, 36.47, 37.06, 37.65, 38.24, 38.82, 39.41, 
+  24            40.00, 40.59, 41.18, 41.76, 42.35, 42.94, 43.53, 44.12, 44.71, 45.29, 45.88, 46.47, 47.06, 47.65, 48.24, 
+             -48.82, 49.41, 50.00, 50.59, 51.18, 51.76, 52.35, 
+  25            52.94, 53.53, 54.12, 54.71, 55.29, 55.88, 56.47, 57.06, 57.65, 58.24, 58.82, 59.41, 60.00, 60.59, 61.18, 
+             -61.76, 62.35, 62.94, 63.53, 64.12, 64.71, 65.29, 
+  26            65.88, 66.47, 67.06, 67.65, 68.24, 68.82, 69.41, 70.00, 70.59, 71.18, 71.76, 72.35, 72.94, 73.53, 74.12, 
+             -74.71, 75.29, 75.88, 76.47, 77.06, 77.65, 78.24, 
+  27            78.82, 79.41, 80.00, 80.59, 81.18, 81.76, 82.35, 82.94, 83.53, 84.12, 84.71, 85.29, 85.88, 86.47, 87.06, 
+             -87.65, 88.24, 88.82, 89.41, 90.00, 90.59, 91.18, 
+  28            91.76, 92.35, 92.94, 93.53, 94.12, 94.71, 95.29, 95.88, 96.47, 97.06, 97.65, 98.24, 98.82, 99.41, 100.00,
+             - 100.59, 101.18, 101.76, 102.35, 102.94, 103.53, 
+  29            104.12, 104.71, 105.29, 105.88, 106.47, 107.06, 107.65, 108.24, 108.82, 109.41, 110.00, 110.59, 111.18, 1
+             -11.76, 112.35, 112.94, 113.53, 114.12, 114.71, 
+  30            115.29, 115.88, 116.47, 117.06, 117.65, 118.24, 118.82, 119.41, 120.00, 120.59, 121.18, 121.76, 122.35, 1
+             -22.94, 123.53, 124.12, 124.71, 125.29, 125.88, 
+  31            126.47, 127.06, 127.65, 128.24, 128.82, 129.41, 130.00, 130.59, 131.18, 131.76, 132.35, 132.94, 133.53, 1
+             -34.12, 134.71, 135.29, 135.88, 136.47, 137.06, 
+  32            137.65, 138.24, 138.82, 139.41, 140.00, 140.59, 141.18, 141.76, 142.35, 142.94, 143.53, 144.12, 144.71, 1
+             -45.29, 145.88, 146.47, 147.06, 147.65, 148.24, 
+  33            148.82, 149.41, 150.00
+  34          };
+  35          
+  36          //--------------------------------------------------------
+  37          // interrupção que gera o clock para o conversor adc
+  38          void timer0() interrupt 1 { 
+  39   1        clk = ~clk;
+  40   1        TF0 = 0; 
+  41   1      }
+  42          //--------------------------------------------------------
+C51 COMPILER V9.60.0.0   MAIN                                                              12/09/2019 10:01:14 PAGE 2   
+
+  43          //função que cria delay de 1ms
+  44          void delay(int count) {
+  45   1        int i,j;
+  46   1          for(i=0;i<count;i++)    
+  47   1            for(j=0;j<1275;j++); 
+  48   1      }
+  49          
+  50          //--------------------------------------------------------
+  51          // função escreve no lcd
+  52          void write_lcd(int ch) { 
+  53   1        lcdport=ch;
+  54   1        rs=1;
+  55   1        rw=0;
+  56   1        en=1;
+  57   1        delay(1);
+  58   1        en=0;
+  59   1      }
+  60          //--------------------------------------------------------
+  61          // envia comando para habilitar o lcd
+  62          void command_lcd(char ch) { 
+  63   1        lcdport=ch;
+  64   1        rs=0;
+  65   1        rw=0;
+  66   1        en=1;
+  67   1        delay(5);
+  68   1        en=0;
+  69   1      }
+  70          //--------------------------------------------------------
+  71          // envia uma string para o display lcd
+  72          void print_lcd(char *str) {
+  73   1        while(*str) {
+  74   2          write_lcd(*str);
+  75   2          delay(4);
+  76   2          str++;
+  77   2        }
+  78   1      }
+  79          //--------------------------------------------------------
+  80          // Método para enviar uma string para o display lcd e retorna o tamanho da string
+  81          void print_lcd_shifting(char *str) { 
+  82   1        command_lcd(0x01);
+  83   1        while(*str) {
+  84   2          command_lcd(0x06);
+  85   2          command_lcd(0x07);
+  86   2          write_lcd(*str);
+  87   2          str++;
+  88   2        }
+  89   1      }
+  90          //--------------------------------------------------------
+  91          // envia uma string por display lcd de forma que ele passe 
+  92          //de um lado ao outro no display e retorna o tamanho da string enviada
+  93          void print_and_get_out(char *str) { 
+  94   1        print_lcd_shifting(str);
+  95   1        for(i=0; i <= 32; i++) {
+  96   2          command_lcd(0x1c);
+  97   2          delay(5);
+  98   2        }
+  99   1        command_lcd(0x01);
+ 100   1      }
+ 101          //--------------------------------------------------------
+ 102          // fnção para inicializar o LCD
+ 103          void ini_lcd() { 
+ 104   1        delay(20);
+C51 COMPILER V9.60.0.0   MAIN                                                              12/09/2019 10:01:14 PAGE 3   
+
+ 105   1        command_lcd(0x38); // seta o display para 2 linhas
+ 106   1        delay(10);
+ 107   1        command_lcd(0x0c); // oculta o cursor no display
+ 108   1        delay(10);
+ 109   1        command_lcd(0x01); // limpa do display
+ 110   1        delay(10);
+ 111   1        command_lcd(0x80); //coloca o cursor no inicio da tela
+ 112   1        delay(10);
+ 113   1      }
+ 114          //--------------------------------------------------------
+ 115          // converte os dados lidos pelo conversor adc em hexadecimal para 
+ 116          //o valor de temperatura equivalente e envia para o display lcd 
+ 117          //juntamente com o estado do rele
+ 118          void show_lcd() { 
+ 119   1        sprintf(result,"%0.2f",temp[number]);//tempo de 2s de exibição de boas vindas
+*** WARNING C182 IN LINE 119 OF main.c: pointer to different objects
+ 120   1        print_lcd(result);
+*** WARNING C182 IN LINE 120 OF main.c: pointer to different objects
+ 121   1        print_lcd(" ");
+ 122   1        if (rele == 1) {
+ 123   2          print_lcd("    DESLIGADO");
+ 124   2        } else {
+ 125   2          print_lcd("    LIGADO   ");
+ 126   2        }
+ 127   1      }
+ 128          //--------------------------------------------------------
+ 129          // função para ler o dados obtidos pelo conversor adc
+ 130          void read_adc() { 
+ 131   1        ale=1;
+ 132   1        start=1;
+ 133   1        delay(5);
+ 134   1        ale=0;
+ 135   1        start=0;
+ 136   1        while(eoc==1);
+ 137   1        while(eoc==0);
+ 138   1        oe=1;
+ 139   1        number=input_port;
+ 140   1        delay(5);
+ 141   1        oe=0;
+ 142   1      }
+ 143          //--------------------------------------------------------
+ 144          // faz o envio de um caracter via serial
+ 145          void serial_data(char ch) { 
+ 146   1        SBUF = ch; 
+ 147   1        while(TI == 0); // espera o fim do envio do caractere
+ 148   1        TI = 0; // libera o canal de serial
+ 149   1      }
+ 150          //--------------------------------------------------------
+ 151          // envia caractere por caractere de uma string via serial
+ 152          
+ 153          void print_serial(char *str) { 
+ 154   1        while(*str) {
+ 155   2          serial_data(*str);
+ 156   2          str++;
+ 157   2        }
+ 158   1      }
+ 159          //--------------------------------------------------------
+ 160          // método que envia os dados para serial
+ 161          void show_serial() { 
+ 162   1        serial_data(0x0d); // envia uma quebra de linha
+ 163   1        print_serial(result); // envia o resultado da conversão de temperatura
+*** WARNING C182 IN LINE 163 OF main.c: pointer to different objects
+C51 COMPILER V9.60.0.0   MAIN                                                              12/09/2019 10:01:14 PAGE 4   
+
+ 164   1        if (rele == 1) { // envia o estado do rele
+ 165   2          print_serial(" Desativado");
+ 166   2        } else {
+ 167   2          print_serial(" Ativado");
+ 168   2        }
+ 169   1        serial_data(0x0d); // envia uma quebra de linha
+ 170   1      }
+ 171          
+ 172          void main() {
+ 173   1        // configuração do adc
+ 174   1        eoc=1;
+ 175   1        ale=0;
+ 176   1        oe=0;
+ 177   1        start=0;
+ 178   1      
+ 179   1        // configuração serial
+ 180   1        IE = 0x82;
+ 181   1        SCON = 0x50;
+ 182   1      
+ 183   1        // configuração do timer
+ 184   1        TMOD = 0x22;
+ 185   1        TH0 = 0x9b;
+ 186   1        TH1 = 0xfd;
+ 187   1        TL0 = 0x9b;
+ 188   1        TR1 = 1;
+ 189   1        TR0 = 1;
+ 190   1        
+ 191   1        ini_lcd(); // chama o método de inicialização do display
+ 192   1        print_lcd("Bem Vindo");
+ 193   1        delay(200);
+ 194   1        command_lcd(0x01); // limpa o display
+ 195   1        print_and_get_out("Bem Vindo");
+ 196   1        print_and_get_out("Bem Vindo");
+ 197   1        print_and_get_out("Bem Vindo");
+ 198   1        command_lcd(0x01); // limpa o display
+ 199   1        command_lcd(0x06); // para de "rodar" o display
+ 200   1        print_lcd("Temp:     Rele:");
+ 201   1        while (1) { // entra em loop inifinito
+ 202   2          command_lcd(0xc0); // coloca o cursor do display na segunda linha
+ 203   2          read_adc(); // le os dados de temperatura fornecidos pelo conversor adc
+ 204   2          
+ 205   2          // verifica a temperatura atual e controla o rele por meio de histerese
+ 206   2          if (number < 39) { 
+ 207   3            rele = 0;
+ 208   3          }
+ 209   2          if (number > 46) {
+ 210   3            rele = 1;
+ 211   3          }
+ 212   2          show_lcd(); // atualiza os dados no display de acordo com as medições
+ 213   2          if (RI == 1) { // se receber algum dado da serial
+ 214   3            RI = 0; // espera o termino do envio do dado
+ 215   3            if (SBUF == 'm') { // se o dado for o caractere 'm'
+ 216   4              show_serial(); // envia as informações de temperatura e do relê via serial
+ 217   4            }
+ 218   3          }
+ 219   2        }
+ 220   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    609    ----
+   CONSTANT SIZE    =   1107    ----
+C51 COMPILER V9.60.0.0   MAIN                                                              12/09/2019 10:01:14 PAGE 5   
+
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     25       6
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  3 WARNING(S),  0 ERROR(S)
